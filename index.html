@@ -4,46 +4,159 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>卡厄斯存档数据模拟器</title>
-    <!-- 引入Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 使用Inter字体 */
-        body {
-            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        /* 拖动时的样式 */
+        .sortable-ghost {
+            opacity: 0.4;
+            background: #4a5568; /* gray-700 */
         }
-        /* 自定义下拉菜单箭头颜色，以在深色背景下可见 */
-        select {
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-            background-position: right 0.5rem center;
-            background-repeat: no-repeat;
-            background-size: 1.5em 1.5em;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            padding-right: 2.5rem; /* 确保文字不与箭头重叠 */
+        .sortable-drag {
+            opacity: 1 !important;
+            background: #2d3748; /* gray-800 */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+        }
+        /* 拖动 handle */
+        .drag-handle {
+            cursor: move; /* or cursor: grab */
         }
     </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                },
+            },
+        };
+    </script>
 </head>
-<body class="bg-gray-900 text-gray-200 min-h-screen p-4 md:p-8">
+<body class="bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
 
-    <div class="max-w-6xl mx-auto">
-        <h1 class="text-3xl font-bold text-center text-white mb-8">卡厄斯存档数据模拟器</h1>
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-4xl font-bold text-white mb-2">卡厄斯存档数据模拟器</h1>
+        <p class="text-lg text-gray-400 mb-8">添加卡牌并选择参数以计算总积分。</p>
 
         <!-- 卡牌行容器 -->
-        <div id="cards-container" class="space-y-4 mb-6">
-            <!-- 卡牌行将通过JS动态插入这里 -->
+        <div id="cards-container" class="space-y-4">
+            <!-- 卡牌行将在这里动态插入 -->
         </div>
 
+        <!-- 卡牌行模板 -->
+        <template id="card-row-template">
+            <div class="card-row bg-gray-800 rounded-lg shadow-lg border border-gray-700 transition-all duration-300">
+                <!-- UPDATED: Grid layout changed to md:grid-cols-12, added items-center -->
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-2 p-4 items-center">
+                    
+                    <!-- NEW: Drag Handle -->
+                    <div class="md:col-span-1 flex items-center justify-center text-gray-500 drag-handle" title="拖动排序">
+                        <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                           <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
+                        </svg>
+                    </div>
+
+                    <!-- 1. 稀有度 -->
+                    <!-- UPDATED: md:col-span-2 -->
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">卡牌稀有度</label>
+                        <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="rarity">
+                            <option value="none" data-points="0">无 (0)</option>
+                            <option value="common" data-points="1">一般 (1)</option>
+                            <option value="rare" data-points="2">稀有 (2)</option>
+                            <option value="epic" data-points="4">史诗 (4)</option>
+                            <option value="legendary" data-points="8">传说 (8)</option>
+                        </select>
+                    </div>
+
+                    <!-- 2. 操作 -->
+                    <!-- UPDATED: md:col-span-1 -->
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">操作</label>
+                        <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="operation">
+                            <option value="none">无</option>
+                            <option value="remove">移除</option>
+                            <option value="transform">转换</option>
+                        </select>
+                    </div>
+
+                    <!-- 3. 转换后稀有度 (隐藏) -->
+                    <!-- UPDATED: md:col-span-2 -->
+                    <div class="md:col-span-2 transformed-rarity-container" style="display: none;">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">转换后稀有度</label>
+                        <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="transformedRarity">
+                            <option value="none" data-points="0">无 (0)</option>
+                            <option value="common" data-points="1">一般 (1)</option>
+                            <option value="rare" data-points="2">稀有 (2)</option>
+                            <option value="epic" data-points="4">史诗 (4)</option>
+                            <option value="legendary" data-points="8">传说 (8)</option>
+                        </select>
+                    </div>
+
+                    <!-- 4. 闪卡/效果 -->
+                    <!-- UPDATED: md:col-span-2 -->
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">闪卡/效果</label>
+                        <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="effect">
+                            <option value="none" data-points="0">无 (0)</option>
+                            <option value="normal_flash" data-points="2">普闪 (2)</option>
+                            <option value="super_flash" data-points="3">神闪 (3)</option>
+                            <option value="positive" data-points="5">正面效果 (5)</option>
+                            <option value="positive_super" data-points="10">正面效果+神闪 (10)</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+
+                    <!-- 5. 自定义效果 (隐藏) -->
+                    <!-- UPDATED: md:col-span-1 -->
+                    <div class="md:col-span-1 custom-effect-container" style="display: none;">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">自定义 (0-12)</label>
+                        <input type="number" min="0" max="12" value="0" class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="customEffectValue">
+                    </div>
+
+                    <!-- 6. 是否带出 -->
+                    <!-- UPDATED: md:col-span-2 -->
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">是否带出</label>
+                        <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="carryOut">
+                            <option value="not_carried" data-points="0">未带出 (0)</option>
+                            <option value="no_loss" data-points="1">无损带出 (1)</option>
+                            <option value="loss" data-points="-2">有损带出 (-2)</option>
+                            <option value="re_enter" data-points="-2">重入构筑 (-2)</option>
+                        </select>
+                    </div>
+                    
+                    <!-- 7. 行总分 和 删除/复制按钮 -->
+                    <!-- UPDATED: md:col-span-1 -->
+                    <div class="md:col-span-1 flex flex-col items-end justify-between h-full pt-2">
+                        <div class="text-right w-full">
+                            <span class="text-xs text-gray-400">卡牌总分</span>
+                            <div class="text-2xl font-bold text-white row-total">0</div>
+                            <span class="beyond-eighth-label text-xs font-medium text-yellow-400" style="display: none;">(8张外)</span>
+                        </div>
+                        <div class="flex space-x-3 mt-2">
+                            <button class="copy-card-btn text-sm text-blue-400 hover:text-blue-300 transition duration-200">
+                                复制
+                            </button>
+                            <button class="remove-card-btn text-sm text-red-400 hover:text-red-300 transition duration-200">
+                                删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+        <!-- 模板结束 -->
+
         <!-- 操作按钮 -->
-        <div class="flex justify-start mb-6 space-x-4"> <!-- MODIFIED: Added spacing -->
+        <div class="flex justify-start mb-6 space-x-4 mt-6">
             <button id="add-card-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200">
                 + 添加新卡牌
             </button>
-            <!-- NEW BUTTON -->
             <button id="fill-defaults-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200">
                 默认全开 (8张)
             </button>
-            <!-- NEW RESET BUTTON -->
             <button id="reset-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200">
                 重置数据
             </button>
@@ -51,417 +164,204 @@
 
         <!-- 总结分 -->
         <div class="bg-gray-800 p-6 rounded-lg shadow-xl mt-8">
-            <div class="flex justify-between items-center mb-4"> <!-- ADDED: Margin bottom -->
-                <span class="text-2xl font-bold text-gray-300">总积分:</span>
-                <span id="grand-total" class="text-4xl font-extrabold text-white">0</span>
+            <h2 class="text-2xl font-semibold text-white mb-4">总计</h2>
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-lg text-gray-400">总复制次数:</span>
+                <span id="copy-count" class="text-2xl font-bold text-blue-400">0</span>
             </div>
-            <!-- NEW: Copy Count Display -->
-            <div class="flex justify-between items-center border-t border-gray-700 pt-4">
-                <span class="text-lg font-medium text-gray-400">总复制次数:</span>
-                <span id="copy-count" class="text-2xl font-bold text-white">0</span>
+            <div class="flex justify-between items-center">
+                <span class="text-lg text-gray-400">总积分:</span>
+                <span id="grand-total" class="text-3xl font-bold text-green-400">0</span>
             </div>
         </div>
+
     </div>
 
-    <!-- 卡牌行HTML模板 (不可见) -->
-    <template id="card-row-template">
-        <div class="bg-gray-800 p-4 rounded-lg shadow-lg border border-gray-700 card-row">
-            <!-- UPDATED: Grid layout changed to 5 columns -->
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
-                
-                <!-- 1. REMOVED: 卡牌名称 (可选) -->
-
-                <!-- 2. 卡牌稀有度 -->
-                <div class="md:col-span-1">
-                    <label class="block text-sm font-medium text-gray-400 mb-1">卡牌稀有度</label>
-                    <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="rarity">
-                        <option value="none">-- 选择 --</option>
-                        <option value="common">一般 (1)</option>
-                        <option value="rare">稀有 (2)</option>
-                        <option value="epic">史诗 (4)</option>
-                        <option value="legendary">传说 (8)</option>
-                    </select>
-                </div>
-
-                <!-- 3. 操作 -->
-                <div class="md:col-span-1">
-                    <label class="block text-sm font-medium text-gray-400 mb-1">操作</label>
-                    <!-- UPDATED: Removed static point values from options -->
-                    <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="operation">
-                        <option value="none">无</option>
-                        <option value="remove">移除</option>
-                        <!-- REMOVED: "copy" option -->
-                        <option value="transform">转换</option>
-                    </select>
-                    <!-- ADDED: New "Transformed Rarity" dropdown, hidden by default -->
-                    <div class="transformed-rarity-container mt-2" style="display: none;">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">转换后稀有度</label>
-                        <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="transformedRarity">
-                            <option value="none">-- 选择 --</option>
-                            <option value="common">一般 (1)</option>
-                            <option value="rare">稀有 (2)</option>
-                            <option value="epic">史诗 (4)</option>
-                            <option value="legendary">传说 (8)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- 4. 闪卡/效果 -->
-                <div class="md:col-span-1">
-                    <label class="block text-sm font-medium text-gray-400 mb-1">闪卡/效果</label>
-                    <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="effect">
-                        <option value="none">无 (0)</option>
-                        <option value="shiny_normal_10">普闪 (技能修改,基础倍率) (10)</option>
-                        <option value="shiny_god_9_ap">神闪 (特殊技,AP增加) (9)</option>
-                        <option value="shiny_god_9_multi">神闪 (特殊技,基础倍率) (9)</option>
-                        <option value="shiny_god_10">神闪 (回合BUFF...,消耗减少) (10)</option>
-                        <option value="custom">自定义 (0-12)</option>
-                    </select>
-                    <!-- ADDED: Custom input field, hidden by default -->
-                    <input type="number" min="0" max="12" placeholder="输入 0-12" class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 mt-2 focus:ring-blue-500 focus:border-blue-500 custom-effect-input" style="display: none;">
-                </div>
-
-                <!-- 5. 是否带出 -->
-                <div class="md:col-span-1">
-                    <label class="block text-sm font-medium text-gray-400 mb-1">是否带出</label>
-                    <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="broughtOut">
-                        <option value="not_brought_out">未带出 (0)</option>
-                        <option value="no_loss" selected>无损带出</option>
-                        <option value="loss">有损带出 (-8)</option>
-                        <option value="re_enter">重入构筑 (-2)</option>
-                    </select>
-                </div>
-
-                <!-- 6. 行总分 和 删除按钮 -->
-                <!-- UPDATED: Spans 1 column -->
-                <div class="md:col-span-1 flex flex-col items-end justify-between h-full pt-2">
-                    <div class="text-right w-full">
-                        <span class="text-xs text-gray-400">卡牌总分</span>
-                        <div class="text-2xl font-bold text-white row-total">0</div>
-                    </div>
-                    <!-- NEW: Button Container -->
-                    <div class="flex space-x-3 mt-2">
-                        <button class="copy-card-btn text-sm text-blue-400 hover:text-blue-300 transition duration-200">
-                            复制
-                        </button>
-                        <button class="remove-card-btn text-sm text-red-400 hover:text-red-300 transition duration-200">
-                            删除
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </template>
+    <!-- NEW: SortableJS Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const cardsContainer = document.getElementById('cards-container');
             const addCardBtn = document.getElementById('add-card-btn');
-            const fillDefaultsBtn = document.getElementById('fill-defaults-btn'); // NEW: Get new button
-            const resetBtn = document.getElementById('reset-btn'); // NEW: Get reset button
+            const fillDefaultsBtn = document.getElementById('fill-defaults-btn');
+            const resetBtn = document.getElementById('reset-btn');
             const cardRowTemplate = document.getElementById('card-row-template');
             const grandTotalEl = document.getElementById('grand-total');
-            const copyCountEl = document.getElementById('copy-count'); // NEW: Get copy count element
+            const copyCountEl = document.getElementById('copy-count');
 
-            let totalCopyCount = 0; // NEW: Initialize copy counter
+            let totalCopyCount = 0;
 
-            // --- NEW: Centralized Listener Attachment ---
+            // --- NEW: Initialize SortableJS ---
+            new Sortable(cardsContainer, {
+                animation: 150, // 动画
+                handle: '.drag-handle', // 指定拖动 handle
+                ghostClass: 'sortable-ghost', // 拖动占位符的样式
+                dragClass: 'sortable-drag', // 正在拖动的项目的样式
+                // 拖动结束时触发
+                onEnd: () => {
+                    // 订单已更改，重新计算所有总数
+                    // (SortableJS 已经更新了 DOM 顺序)
+                    calculateAllTotals();
+                }
+            });
+            // --- END NEW ---
+
+            // 添加新卡牌
+            function addNewCard(calculateNow = true, isCopy = false) {
+                const newRow = cardRowTemplate.content.cloneNode(true).firstElementChild;
+                
+                // 设置默认值
+                newRow.querySelector('[data-param="carryOut"]').value = 'no_loss';
+
+                // 附加事件监听器
+                attachListenersToRow(newRow);
+
+                // 如果是复制行
+                if (isCopy) {
+                    newRow.classList.add('opacity-70', 'border-dashed', 'border-blue-400');
+                    newRow.setAttribute('data-is-copy', 'true');
+                }
+                
+                cardsContainer.appendChild(newRow);
+                
+                if (calculateNow) {
+                    calculateAllTotals();
+                }
+                return newRow;
+            }
+
+            // 为一行中的所有元素附加监听器
             function attachListenersToRow(row) {
-                // 1. Rarity
-                row.querySelector('[data-param="rarity"]').addEventListener('change', (e) => {
-                    calculateAllTotals();
-                    // REMOVED: updateCopyIfExists(e.target.closest('.card-row'));
+                // 1. 所有参数的通用监听器
+                row.querySelectorAll('.card-parameter').forEach(paramEl => {
+                    const eventType = (paramEl.tagName === 'INPUT') ? 'input' : 'change';
+                    paramEl.addEventListener(eventType, () => {
+                        // 特殊逻辑：显示/隐藏自定义输入框
+                        if (paramEl.dataset.param === 'effect') {
+                            const customContainer = row.querySelector('.custom-effect-container');
+                            customContainer.style.display = (paramEl.value === 'custom') ? 'block' : 'none';
+                        }
+                        // 特殊逻辑：显示/隐藏转换稀有度
+                        if (paramEl.dataset.param === 'operation') {
+                             const transformedRarityContainer = row.querySelector('.transformed-rarity-container');
+                            transformedRarityContainer.style.display = (paramEl.value === 'transform') ? 'block' : 'none';
+                            // 如果不是 transform，重置
+                            if (paramEl.value !== 'transform') {
+                                row.querySelector('[data-param="transformedRarity"]').value = 'none';
+                            }
+                        }
+                        calculateAllTotals();
+                    });
                 });
 
-                // 2. Brought Out
-                row.querySelector('[data-param="broughtOut"]').addEventListener('change', calculateAllTotals);
-
-                // 3. Transformed Rarity (for "Transform" operation)
-                row.querySelector('[data-param="transformedRarity"]').addEventListener('change', calculateAllTotals);
-
-                // 4. Operation (Handles Copy logic)
-                row.querySelector('[data-param="operation"]').addEventListener('change', (e) => {
-                    const operation = e.target.value;
-                    const row = e.target.closest('.card-row'); // Renamed from originalRow
-
-                    // Toggle "Transformed Rarity" dropdown
-                    const transformedRarityContainer = row.querySelector('.transformed-rarity-container');
-                    if (operation === 'transform') {
-                        transformedRarityContainer.style.display = 'block';
-                    } else {
-                        transformedRarityContainer.style.display = 'none';
-                        row.querySelector('[data-param="transformedRarity"]').value = 'none';
-                    }
-
-                    // --- REMOVED: "Copy" logic is moved to its own button ---
-                    
-                    calculateAllTotals();
-                });
-
-                // 5. Effect
-                row.querySelector('[data-param="effect"]').addEventListener('change', (e) => {
-                    const row = e.target.closest('.card-row');
-                    const customEffectInput = row.querySelector('.custom-effect-input');
-                    if (e.target.value === 'custom') {
-                        customEffectInput.style.display = 'block';
-                    } else {
-                        customEffectInput.style.display = 'none';
-                        customEffectInput.value = '';
-                    }
-                    calculateAllTotals();
-                    // REMOVED: updateCopyIfExists(row);
-                });
-
-                // --- FIX START ---
-                // 6. Custom Effect Input
-                // The following block was corrupted with an HTML comment "<!-- ... existing code ... -->"
-                // which caused a SyntaxError. Replaced with the correct function.
-                row.querySelector('.custom-effect-input').addEventListener('input', (e) => {
-                    let value = parseInt(e.target.value, 10);
-                    if (!isNaN(value)) {
-                        if (value > 12) e.target.value = 12;
-                        if (value < 0) e.target.value = 0;
-                    }
-                    calculateAllTotals();
-                    // REMOVED: updateCopyIfExists(e.target.closest('.card-row'));
-                });
-                // --- FIX END ---
-
-                // 7. Remove Button
+                // 2. 删除按钮
                 row.querySelector('.remove-card-btn').addEventListener('click', (e) => {
                     const rowToRemove = e.target.closest('.card-row');
                     
-                    // REMOVED: Logic that auto-deleted a linked copy
+                    // 防止删除最后一行
+                    if (cardsContainer.children.length <= 1) {
+                        return; // 或者显示一个消息
+                    }
                     
                     rowToRemove.remove();
                     calculateAllTotals();
                 });
 
-                // --- NEW: 8. Copy Button ---
+                // 3. 复制按钮
                 row.querySelector('.copy-card-btn').addEventListener('click', (e) => {
                     const originalRow = e.target.closest('.card-row');
                     
-                    const newCopiedRow = addNewCard(false); // Add card but don't calculate yet
-                    // Style as copy
-                    newCopiedRow.classList.add('opacity-70', 'border-dashed', 'border-blue-400'); 
-                    originalRow.after(newCopiedRow); // Place it right after
-                    updateCopiedRow(originalRow, newCopiedRow); // Lock and set values
+                    const newCopiedRow = addNewCard(false, true); // 添加卡牌，标记为复制
+                    originalRow.after(newCopiedRow); // 放在原卡牌之后
+                    
+                    // 继承值
+                    newCopiedRow.querySelector('[data-param="rarity"]').value = originalRow.querySelector('[data-param="rarity"]').value;
+                    newCopiedRow.querySelector('[data-param="effect"]').value = originalRow.querySelector('[data-param="effect"]').value;
+                    newCopiedRow.querySelector('[data-param="customEffectValue"]').value = originalRow.querySelector('[data-param="customEffectValue"]').value;
+                    newCopiedRow.querySelector('[data-param="carryOut"]').value = originalRow.querySelector('[data-param="carryOut"]').value;
 
-                    // --- NEW: Increment copy count ---
+                    // 如果原卡是自定义，显示自定义输入框
+                    if (newCopiedRow.querySelector('[data-param="effect"]').value === 'custom') {
+                         newCopiedRow.querySelector('.custom-effect-container').style.display = 'block';
+                    }
+
+                    // 增加复制次数
                     totalCopyCount++;
                     copyCountEl.textContent = totalCopyCount;
-                    // --- END NEW ---
 
-                    calculateAllTotals(); // Recalculate after adding the row
+                    calculateAllTotals(); // 重新计算
                 });
             }
 
-            // --- NEW: Function to update a copied row ---
-            function updateCopiedRow(originalRow, copiedRow) {
-                // Get values from original row
-                const rarity = originalRow.querySelector('[data-param="rarity"]').value;
-                const effect = originalRow.querySelector('[data-param="effect"]').value;
-                const customEffect = originalRow.querySelector('.custom-effect-input').value;
 
-                // Find elements in copied row
-                const copyRaritySelect = copiedRow.querySelector('[data-param="rarity"]');
-                const copyOperationSelect = copiedRow.querySelector('[data-param="operation"]');
-                const copyTransformContainer = copiedRow.querySelector('.transformed-rarity-container');
-                const copyEffectSelect = copiedRow.querySelector('[data-param="effect"]');
-                const copyCustomInput = copiedRow.querySelector('.custom-effect-input');
-                const copyRemoveBtn = copiedRow.querySelector('.remove-card-btn');
-
-                // Lock Rarity
-                copyRaritySelect.value = rarity;
-                copyRaritySelect.disabled = true;
-
-                // Lock Operation to "none"
-                copyOperationSelect.value = 'none';
-                // copyOperationSelect.disabled = true; // MODIFIED: Copied cards can now have operations
-                copyOperationSelect.disabled = false; // MODIFIED: Unlocked
-                copyTransformContainer.style.display = 'none'; // Hide transform dropdown
-
-                // Lock Effect
-                copyEffectSelect.value = effect;
-                copyEffectSelect.disabled = true;
-
-                // Lock Custom Effect (if applicable)
-                if (effect === 'custom') {
-                    copyCustomInput.value = customEffect;
-                    copyCustomInput.style.display = 'block'; // Show it
-                    copyCustomInput.disabled = true;
-                }
-
-                // --- MODIFICATION START ---
-                // Disable remove button and label it
-                // copyRemoveBtn.disabled = true; // REMOVED - Button is now enabled
-                copyRemoveBtn.innerHTML = '删除 (复制行)';
-                // copyRemoveBtn.classList.add('opacity-50', 'cursor-not-allowed'); // REMOVED
-                
-                // Change color to distinguish but show it's active
-                copyRemoveBtn.classList.remove('text-red-400', 'hover:text-red-300');
-                copyRemoveBtn.classList.add('text-blue-400', 'hover:text-blue-300');
-                // --- MODIFICATION END ---
-            }
-
-            // --- REMOVED: Helper to find and update a copy ---
-            // function updateCopyIfExists(originalRow) { ... }
-
-            // --- MODIFIED: addNewCard ---
-            // Accepts a boolean to prevent circular calls to calculateAllTotals
-            function addNewCard(doCalculate = true) {
-                const newRowTemplate = cardRowTemplate.content.cloneNode(true);
-                const newRow = newRowTemplate.firstElementChild; // Get the .card-row
-                attachListenersToRow(newRow);
-    
-                // We append the template's content, which is a DocumentFragment
-                cardsContainer.appendChild(newRowTemplate); 
-                
-                if (doCalculate) {
-                    calculateAllTotals();
-                }
-                return newRow; // Return the element
-            }
-
-            // 计算所有卡牌的总分
+            // 计算所有总分
             function calculateAllTotals() {
                 let grandTotal = 0;
-                const allCardRows = document.querySelectorAll('.card-row');
+                const allRows = cardsContainer.querySelectorAll('.card-row');
 
-                allCardRows.forEach((row, index) => { // ADDED: index parameter
-                    // 1. 获取所有参数值
-                    const rarity = row.querySelector('[data-param="rarity"]').value;
+                allRows.forEach((row, index) => {
+                    // 1. 基础点数 (稀有度)
+                    const rarityEl = row.querySelector('[data-param="rarity"]');
+                    const basePoints = parseInt(rarityEl.options[rarityEl.selectedIndex].dataset.points || 0);
+
+                    // 2. 操作点数
                     const operation = row.querySelector('[data-param="operation"]').value;
-                    const effect = row.querySelector('[data-param="effect"]').value;
-                    const broughtOut = row.querySelector('[data-param="broughtOut"]').value;
-                    // ADDED: Get new dropdown value
-                    const transformedRarity = row.querySelector('[data-param="transformedRarity"]').value;
-
-                    // --- NEW: Check card state ---
-                    const isBeyondEighth = (index >= 8); // 检查是否是第9张或之后的卡 (index starts at 0)
-                    const isCopied = row.classList.contains('border-blue-400'); // 检查是否是复制行
-
-                    // 2. 根据表格逻辑计算点数
-                    let basePoints = 0;
-                    switch (rarity) {
-                        case 'common': basePoints = 1; break;
-                        case 'rare': basePoints = 2; break;
-                        case 'epic': basePoints = 4; break;
-                        case 'legendary': basePoints = 8; break;
-                    }
-
-                    // --- MODIFICATION START ---
-                    // UPDATED: Operation points are now linked to basePoints (rarity)
                     let operationPoints = 0;
-                    if (operation === 'remove') { // REMOVED: || operation === 'copy'
+                    if (operation === 'remove') {
                         operationPoints = basePoints; // 挂钩稀有度
                     } else if (operation === 'transform') {
-                        // ADDED: Logic for transform
-                        let transformedPoints = 0;
-                        switch (transformedRarity) {
-                            case 'common': transformedPoints = 1; break;
-                            case 'rare': transformedPoints = 2; break;
-                            case 'epic': transformedPoints = 4; break;
-                            case 'legendary': transformedPoints = 8; break;
-                        }
-                        // 分数 = 转换后稀有度分数 + 基本稀有度分数
-                        operationPoints = transformedPoints + basePoints;
+                        const transformedRarityEl = row.querySelector('[data-param="transformedRarity"]');
+                        const transformedPoints = parseInt(transformedRarityEl.options[transformedRarityEl.selectedIndex].dataset.points || 0);
+                        operationPoints = basePoints + transformedPoints; // 基础 + 转换后
                     }
-                    // --- MODIFICATION END ---
 
-                    // --- MODIFICATION START ---
+                    // 3. 效果点数
+                    const effectEl = row.querySelector('[data-param="effect"]');
                     let effectPoints = 0;
-                    if (effect === 'custom') {
-                        const customInput = row.querySelector('.custom-effect-input');
-                        let customValue = parseInt(customInput.value, 10);
-
-                        if (isNaN(customValue)) {
-                            customValue = 0;
-                        } else if (customValue > 12) {
-                            customValue = 12;
-                            customInput.value = 12; // Correct the UI
-                        } else if (customValue < 0) {
-                            customValue = 0;
-                            customInput.value = 0; // Correct the UI
-                        }
-                        effectPoints = customValue;
-                        
+                    if (effectEl.value === 'custom') {
+                        effectPoints = parseInt(row.querySelector('[data-param="customEffectValue"]').value || 0);
+                        if (effectPoints < 0) effectPoints = 0;
+                        if (effectPoints > 12) effectPoints = 12;
                     } else {
-                        switch (effect) {
-                            case 'shiny_normal_10': effectPoints = 10; break;
-                            case 'shiny_god_9_ap': effectPoints = 9; break;
-                            case 'shiny_god_9_multi': effectPoints = 9; break;
-                            case 'shiny_god_10': effectPoints = 10; break;
-                            // 'none' and others default to 0
-                        }
+                        effectPoints = parseInt(effectEl.options[effectEl.selectedIndex].dataset.points || 0);
                     }
-                    // --- MODIFICATION END ---
 
-                    let broughtOutPoints = 0;
-                    let lostPoints = 0;
-                    switch (broughtOut) {
-                        case 'not_brought_out':
-                            // 基础点数: 0, 损失效果点: 0
-                            broughtOutPoints = 0;
-                            lostPoints = 0;
-                            break;
-                        case 'no_loss':
-                            // 基础点G数 = 基础点数 + 操作点数 (根据数据推断)
-                            broughtOutPoints = basePoints + operationPoints;
-                            lostPoints = 0;
-                            break;
-                        case 'loss':
-                            // 基础点数 = 基础点数 + 操作点数, 损失效果点: -8
-                            broughtOutPoints = basePoints + operationPoints;
-                            lostPoints = -8;
-                            break;
-                        case 're_enter':
-                            // 基础点数: 0, 损失效果点: -2
-                            broughtOutPoints = 0;
-                            lostPoints = -2;
-                            break;
-                    }
+                    // 4. 带出点数
+                    const carryOutEl = row.querySelector('[data-param="carryOut"]');
+                    const carryOutPoints = parseInt(carryOutEl.options[carryOutEl.selectedIndex].dataset.points || 0);
                     
-                    // 3. 计算行总分 (x)
-                    // 行总分 = 操作点数 + 效果点数 + 带出点数 + 损失效果点
-                    const baseRowTotal = operationPoints + effectPoints + broughtOutPoints + lostPoints;
-
-                    // --- NEW: Apply multipliers based on rules ---
+                    // --- 基础行总分 (X) ---
+                    const baseRowTotal = basePoints + operationPoints + effectPoints + carryOutPoints;
+                    
+                    // --- 逻辑：计算最终行总分 (倍率) ---
+                    const isCopied = row.hasAttribute('data-is-copy');
+                    const isBeyondEighth = (index >= 8); // 索引从0开始，第9张卡 index 为 8
+                    
                     let finalRowTotal = baseRowTotal;
+
+                    // 检查倍率
                     if (isCopied) {
-                        finalRowTotal += baseRowTotal; // x + x
+                        finalRowTotal += baseRowTotal; // x+x
                     }
                     if (isBeyondEighth) {
-                        finalRowTotal += baseRowTotal; // x + x (or x + x + x if also copied)
+                        finalRowTotal += baseRowTotal; // x+x (如果也是复制的，则为 x+x+x)
                     }
                     
-                    // --- NEW: Add/Remove visual label for 'Beyond 8th' ---
-                    const rowScoreContainer = row.querySelector('.row-total').closest('.text-right');
-                    let beyondLabel = rowScoreContainer.querySelector('.beyond-8-label');
-
+                    // 更新 UI
+                    row.querySelector('.row-total').textContent = finalRowTotal;
+                    
+                    const beyondLabel = row.querySelector('.beyond-eighth-label');
                     if (isBeyondEighth) {
-                        if (!beyondLabel) {
-                            beyondLabel = document.createElement('span');
-                            beyondLabel.textContent = '(8张外)';
-                            // Apply Tailwind classes
-                            beyondLabel.className = 'beyond-8-label text-xs text-yellow-400 mr-2'; 
-                            // Insert before the '卡牌总分' span
-                            rowScoreContainer.querySelector('.text-xs').before(beyondLabel); 
-                        }
+                        beyondLabel.style.display = 'inline';
                     } else {
-                        if (beyondLabel) {
-                            beyondLabel.remove(); // Remove label if card moves back into top 8
-                        }
+                        beyondLabel.style.display = 'none';
                     }
 
-                    // 4. 更新行总分显示
-                    row.querySelector('.row-total').textContent = finalRowTotal; // Use finalRowTotal
-
-                    // 5. 累加到总积分
-                    grandTotal += finalRowTotal; // Use finalRowTotal
+                    grandTotal += finalRowTotal;
                 });
 
-                // 更新总积分显示
+                // 更新总分
                 grandTotalEl.textContent = grandTotal;
             }
 
@@ -470,16 +370,12 @@
                 addNewCard(true); // Standard add
             });
 
-            // --- NEW: Fill Defaults Button Event ---
+            // "默认全开" 按钮
             fillDefaultsBtn.addEventListener('click', () => {
-                // 1. 清空现有卡牌
                 cardsContainer.innerHTML = '';
-                
-                // 2. 重置复制次数
                 totalCopyCount = 0;
                 copyCountEl.textContent = '0';
 
-                // 3. 定义默认稀有度
                 const defaultRarities = [
                     'common', 'common', 'common', // 3x 一般
                     'rare', 'rare', 'rare',     // 3x 稀有
@@ -487,33 +383,21 @@
                     'legendary'                 // 1x 传说
                 ];
 
-                // 4. 添加新卡
                 defaultRarities.forEach(rarity => {
-                    const newRow = addNewCard(false); // 添加卡牌，暂时不计算总分
-                    // 设置稀有度
+                    const newRow = addNewCard(false);
                     newRow.querySelector('[data-param="rarity"]').value = rarity;
-                    // 其他选项将使用模板的默认值
                 });
 
-                // 5. 计算最终总分
                 calculateAllTotals();
             });
-            // --- END NEW ---
 
-            // --- NEW: Reset Button Event ---
+            // "重置" 按钮
             resetBtn.addEventListener('click', () => {
-                // 1. 清空现有卡牌
                 cardsContainer.innerHTML = '';
-                
-                // 2. 重置复制次数
                 totalCopyCount = 0;
                 copyCountEl.textContent = '0';
-
-                // 3. 添加一个默认新行并计算总分
-                // (addNewCard 内部会调用 calculateAllTotals)
                 addNewCard(true);
             });
-            // --- END NEW ---
 
             // 页面加载时自动添加一行
             addNewCard(true);
