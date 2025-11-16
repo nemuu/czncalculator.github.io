@@ -3,406 +3,483 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>卡厄斯存档数据模拟器</title>
+    <title>卡厄斯PT计算器</title>
+    <!-- 引入Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Inter字体 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        /* 拖动时的样式 */
-        .sortable-ghost {
-            opacity: 0.4;
-            background: #4a5568; /* gray-700 */
+        /* 自定义样式 */
+        body {
+            font-family: 'Inter', 'Microsoft YaHei', sans-serif;
+            background-color: #1a1b26; /* 深色背景 */
+            color: #c0caf5; /* 默认文字颜色 */
         }
-        .sortable-drag {
-            opacity: 1 !important;
-            background: #2d3748; /* gray-800 */
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+        
+        /* 模拟图片中的UI元素颜色 */
+        .calc-bg {
+            background-color: #24283b; /* 卡片背景 */
         }
-        /* 拖动 handle */
-        .drag-handle {
-            cursor: move; /* or cursor: grab */
+        
+        .display-box {
+            background-color: #1a1b26; /* 深色输入框背景 */
+            border: 1px solid #414868;
         }
+        
+        .btn-purple {
+            background-color: #7aa2f7; /* 按钮颜色 - 调整为蓝色系以匹配主题 */
+            color: #1a1b26; /* 按钮文字颜色 */
+            transition: background-color 0.2s;
+        }
+        .btn-purple:hover {
+            background-color: #9ece6a; /* 按钮悬停颜色 */
+        }
+        .btn-purple:active {
+            transform: scale(0.95);
+        }
+        
+        .btn-gray {
+            background-color: #414868; /* 灰色按钮 */
+            color: #c0caf5;
+            transition: background-color 0.2s;
+        }
+        .btn-gray:hover {
+            background-color: #565f89;
+        }
+        .btn-gray:active {
+            transform: scale(0.95);
+        }
+
+        .tab {
+            background-color: #414868;
+            color: #c0caf5;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .tab.active {
+            background-color: #7aa2f7; /* 激活的Tab颜色 */
+            color: #1a1b26;
+            font-weight: bold;
+        }
+        
+        .pt-display {
+            background-color: #7aa2f7;
+            color: #1a1b26;
+        }
+
+        .pt-display.over-limit {
+            background-color: #f7768e; /* PT超限时的红色 */
+            color: #1a1b26;
+        }
+        
+        .reset-btn {
+            background: none;
+            border: 1px solid #7aa2f7;
+            color: #7aa2f7;
+            transition: all 0.2s;
+        }
+        .reset-btn:hover {
+            background-color: rgba(122, 162, 247, 0.1);
+        }
+
+        /* 隐藏原生number输入框的箭头 */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        /* (新) 自定义弹窗样式 */
+        /* (已移除) .modal-overlay, .modal-content CSS */
     </style>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    },
-                },
-            },
-        };
-    </script>
 </head>
-<body class="bg-gray-900 text-gray-200 font-sans p-4 md:p-8">
+<body class="flex items-center justify-center min-h-screen p-4">
 
-    <div class="max-w-7xl mx-auto">
-        <h1 class="text-4xl font-bold text-white mb-2">卡厄斯存档数据模拟器</h1>
-        <p class="text-lg text-gray-400 mb-8">添加卡牌并选择参数以计算总积分。</p>
-
-        <!-- 卡牌行容器 -->
-        <div id="cards-container" class="space-y-4">
-            <!-- 卡牌行将在这里动态插入 -->
-        </div>
-
-        <!-- 卡牌行模板 -->
-        <template id="card-row-template">
-            <div class="card-row bg-gray-800 rounded-lg shadow-lg border border-gray-700 transition-all duration-300">
-                <!-- UPDATED: Grid layout changed to md:grid-cols-12, added items-center -->
-                <div class="grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-2 p-4 items-center">
-                    
-                    <!-- NEW: Drag Handle -->
-                    <div class="md:col-span-1 flex items-center justify-center text-gray-500 drag-handle" title="拖动排序">
-                        <svg class="w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                           <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 9h16.5m-16.5 6.75h16.5" />
-                        </svg>
-                    </div>
-
-                    <!-- 1. 稀有度 -->
-                    <!-- UPDATED: md:col-span-2 -->
-                    <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-400 mb-1">卡牌稀有度</label>
-                        <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="rarity">
-                            <option value="none" data-points="0">无 (0)</option>
-                            <option value="common" data-points="1">一般 (1)</option>
-                            <option value="rare" data-points="2">稀有 (2)</option>
-                            <option value="epic" data-points="4">史诗 (4)</option>
-                            <option value="legendary" data-points="8">传说 (8)</option>
-                        </select>
-                    </div>
-
-                    <!-- 2. 操作 -->
-                    <!-- UPDATED: md:col-span-1 -->
-                    <div class="md:col-span-1">
-                        <label class="block text-sm font-medium text-gray-400 mb-1">操作</label>
-                        <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="operation">
-                            <option value="none">无</option>
-                            <option value="remove">移除</option>
-                            <option value="transform">转换</option>
-                        </select>
-                    </div>
-
-                    <!-- 3. 转换后稀有度 (隐藏) -->
-                    <!-- UPDATED: md:col-span-2 -->
-                    <div class="md:col-span-2 transformed-rarity-container" style="display: none;">
-                        <label class="block text-sm font-medium text-gray-400 mb-1">转换后稀有度</label>
-                        <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="transformedRarity">
-                            <option value="none" data-points="0">无 (0)</option>
-                            <option value="common" data-points="1">一般 (1)</option>
-                            <option value="rare" data-points="2">稀有 (2)</option>
-                            <option value="epic" data-points="4">史诗 (4)</option>
-                            <option value="legendary" data-points="8">传说 (8)</option>
-                        </select>
-                    </div>
-
-                    <!-- 4. 闪卡/效果 -->
-                    <!-- UPDATED: md:col-span-2 -->
-                    <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-400 mb-1">闪卡/效果</label>
-                        <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="effect">
-                            <option value="none" data-points="0">无 (0)</option>
-                            <option value="normal_flash" data-points="2">普闪 (2)</option>
-                            <option value="super_flash" data-points="3">神闪 (3)</option>
-                            <option value="positive" data-points="5">正面效果 (5)</option>
-                            <option value="positive_super" data-points="10">正面效果+神闪 (10)</option>
-                            <option value="custom">自定义</option>
-                        </select>
-                    </div>
-
-                    <!-- 5. 自定义效果 (隐藏) -->
-                    <!-- UPDATED: md:col-span-1 -->
-                    <div class="md:col-span-1 custom-effect-container" style="display: none;">
-                        <label class="block text-sm font-medium text-gray-400 mb-1">自定义 (0-12)</label>
-                        <input type="number" min="0" max="12" value="0" class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="customEffectValue">
-                    </div>
-
-                    <!-- 6. 是否带出 -->
-                    <!-- UPDATED: md:col-span-2 -->
-                    <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-400 mb-1">是否带出</label>
-                        <select class="w-full bg-gray-900 text-white border border-gray-700 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 card-parameter" data-param="carryOut">
-                            <option value="not_carried" data-points="0">未带出 (0)</option>
-                            <option value="no_loss" data-points="1">无损带出 (1)</option>
-                            <option value="loss" data-points="-2">有损带出 (-2)</option>
-                            <option value="re_enter" data-points="-2">重入构筑 (-2)</option>
-                        </select>
-                    </div>
-                    
-                    <!-- 7. 行总分 和 删除/复制按钮 -->
-                    <!-- UPDATED: md:col-span-1 -->
-                    <div class="md:col-span-1 flex flex-col items-end justify-between h-full pt-2">
-                        <div class="text-right w-full">
-                            <span class="text-xs text-gray-400">卡牌总分</span>
-                            <div class="text-2xl font-bold text-white row-total">0</div>
-                            <span class="beyond-eighth-label text-xs font-medium text-yellow-400" style="display: none;">(8张外)</span>
-                        </div>
-                        <div class="flex space-x-3 mt-2">
-                            <button class="copy-card-btn text-sm text-blue-400 hover:text-blue-300 transition duration-200">
-                                复制
-                            </button>
-                            <button class="remove-card-btn text-sm text-red-400 hover:text-red-300 transition duration-200">
-                                删除
-                            </button>
-                        </div>
-                    </div>
+    <div class="calc-bg w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
+        
+        <!-- 顶部：等级和PT上限 -->
+        <div class="grid grid-cols-2 gap-4">
+            <div class="space-y-1">
+                <label class="text-sm font-medium" for="chaos-level">当前卡厄斯等级</label>
+                <div class="flex items-center">
+                    <button id="level-minus" class="btn-gray w-10 h-10 rounded-l-lg text-xl font-bold">-</button>
+                    <input id="chaos-level" type="number" value="12" class="display-box w-full h-10 text-center text-lg font-bold" readonly>
+                    <button id="level-plus" class="btn-gray w-10 h-10 rounded-r-lg text-xl font-bold">+</button>
                 </div>
             </div>
-        </template>
-        <!-- 模板结束 -->
+            <div class="space-y-1">
+                <label class="text-sm font-medium">卡厄斯PT上限</label>
+                <div id="pt-limit" class="display-box w-full h-10 rounded-lg flex items-center justify-center text-lg font-bold">
+                    140
+                </div>
+            </div>
+        </div>
 
-        <!-- 操作按钮 -->
-        <div class="flex justify-start mb-6 space-x-4 mt-6">
-            <button id="add-card-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200">
-                + 添加新卡牌
+        <!-- 角色标签页 -->
+        <div class="grid grid-cols-3 gap-2">
+            <button id="tab-1" class="tab active h-20 rounded-lg flex flex-col items-center justify-center">
+                <span>角色1</span>
+                <span class="text-xs">当前PT:</span>
+                <span id="pt-display-1" class="pt-display text-lg font-bold px-3 py-0.5 rounded-md mt-1">150</span>
             </button>
-            <button id="fill-defaults-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200">
-                默认全开 (8张)
+            <button id="tab-2" class="tab h-20 rounded-lg flex flex-col items-center justify-center">
+                <span>角色2</span>
+                <span class="text-xs">当前PT:</span>
+                <span id="pt-display-2" class="pt-display text-lg font-bold px-3 py-0.5 rounded-md mt-1">0</span>
             </button>
-            <button id="reset-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-200">
-                重置数据
+            <button id="tab-3" class="tab h-20 rounded-lg flex flex-col items-center justify-center">
+                <span>角色3</span>
+                <span class="text-xs">当前PT:</span>
+                <span id="pt-display-3" class="pt-display text-lg font-bold px-3 py-0.5 rounded-md mt-1">0</span>
             </button>
         </div>
 
-        <!-- 总结分 -->
-        <div class="bg-gray-800 p-6 rounded-lg shadow-xl mt-8">
-            <h2 class="text-2xl font-semibold text-white mb-4">总计</h2>
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-lg text-gray-400">总复制次数:</span>
-                <span id="copy-count" class="text-2xl font-bold text-blue-400">0</span>
-            </div>
-            <div class="flex justify-between items-center">
-                <span class="text-lg text-gray-400">总积分:</span>
-                <span id="grand-total" class="text-3xl font-bold text-green-400">0</span>
-            </div>
+        <!-- 重置按钮 -->
+        <div class="text-center">
+            <button id="reset-btn" class="reset-btn text-sm rounded-full px-4 py-1.5">
+                ↻ 重置 <span id="reset-char-name">角色1</span> 计数
+            </button>
+        </div>
+
+        <!-- 计数器网格 -->
+        <div id="calculator-inputs" class="space-y-3">
+            <!-- 占位符 - JS将在此处填充内容 -->
         </div>
 
     </div>
 
-    <!-- NEW: SortableJS Library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <!-- 计数器项的HTML模板 -->
+    <template id="counter-template">
+        <div class="grid grid-cols-2 gap-4">
+            <!-- 左侧计数器 -->
+            <div class="space-y-1">
+                <label class="text-sm font-medium" data-label="left-label">中立卡数量</label>
+                <div class="flex items-center">
+                    <button data-btn="left-minus" class="btn-purple w-10 h-10 rounded-l-lg text-xl font-bold">-</button>
+                    <input data-input="left-input" type="number" value="0" class="display-box w-full h-10 text-center text-lg font-bold" readonly>
+                    <button data-btn="left-plus" class="btn-purple w-10 h-10 rounded-r-lg text-xl font-bold">+</button>
+                </div>
+            </div>
+            <!-- 右侧计数器 -->
+            <div class="space-y-1">
+                <label class="text-sm font-medium" data-label="right-label">怪物卡数量</label>
+                <div class="flex items-center">
+                    <button data-btn="right-minus" class="btn-purple w-10 h-10 rounded-l-lg text-xl font-bold">-</button>
+                    <input data-input="right-input" type="number" value="0" class="display-box w-full h-10 text-center text-lg font-bold" readonly>
+                    <button data-btn="right-plus" class="btn-purple w-10 h-10 rounded-r-lg text-xl font-bold">+</button>
+                </div>
+            </div>
+        </div>
+    </template>
+    
+    <!-- 单行计数器模板 (用于奇数个) -->
+    <template id="counter-template-single">
+        <div class="space-y-1">
+            <label class="text-sm font-medium" data-label="single-label">中立卡、怪物卡普通灵光-闪数量</label>
+            <div class="flex items-center max-w-xs mx-auto">
+                <button data-btn="single-minus" class="btn-purple w-10 h-10 rounded-l-lg text-xl font-bold">-</button>
+                <input data-input="single-input" type="number" value="0" class="display-box w-full h-10 text-center text-lg font-bold" readonly>
+                <button data-btn="single-plus" class="btn-purple w-10 h-10 rounded-r-lg text-xl font-bold">+</button>
+            </div>
+        </div>
+    </template>
+
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const cardsContainer = document.getElementById('cards-container');
-            const addCardBtn = document.getElementById('add-card-btn');
-            const fillDefaultsBtn = document.getElementById('fill-defaults-btn');
+            // --- 状态管理 ---
+            
+            // 默认值，所有计数为0
+            const defaultInputs = {
+                neutralCards: 0,
+                monsterCards: 0,
+                forbiddenCards: 0,
+                divineAuraFlashes: 0,
+                normalAuraFlashes: 0,
+                deleteCharCardCount: 0,
+                deleteOtherCardCount: 0,
+                copyCount: 0,
+                transformCount: 0,
+            };
+
+            // (旧) 图片中的示例值 - 不再需要，全部使用defaultInputs
+            /*
+            const sampleInputs = {
+                neutralCards: 2,
+                ...
+                transformCount: 2,
+            };
+            */
+
+            let state = {
+                chaosLevel: 12,
+                ptLimit: 140,
+                activeCharacterId: 1,
+                characters: [
+                    { ...defaultInputs }, // 角色1使用默认值
+                    { ...defaultInputs }, // 角色2使用默认值
+                    { ...defaultInputs }  // 角色3使用默认值
+                ]
+            };
+
+            // --- UI 元素 ---
+            const chaosLevelInput = document.getElementById('chaos-level');
+            const ptLimitDisplay = document.getElementById('pt-limit');
+            const levelMinusBtn = document.getElementById('level-minus');
+            const levelPlusBtn = document.getElementById('level-plus');
             const resetBtn = document.getElementById('reset-btn');
-            const cardRowTemplate = document.getElementById('card-row-template');
-            const grandTotalEl = document.getElementById('grand-total');
-            const copyCountEl = document.getElementById('copy-count');
+            const resetCharName = document.getElementById('reset-char-name');
+            const tabs = [
+                document.getElementById('tab-1'), 
+                document.getElementById('tab-2'), 
+                document.getElementById('tab-3')
+            ];
+            const ptDisplays = [
+                document.getElementById('pt-display-1'),
+                document.getElementById('pt-display-2'),
+                document.getElementById('pt-display-3')
+            ];
 
-            let totalCopyCount = 0;
+            // (新) Modal elements
+            /* (已移除) modal, modalText, modalCancel, modalConfirm 变量 */
+            
+            // 计数器定义
+            const countersConfig = [
+                { id: 'neutralCards', label: '中立卡数量' },
+                { id: 'monsterCards', label: '怪物卡数量' },
+                { id: 'forbiddenCards', label: '禁忌卡数量' },
+                { id: 'divineAuraFlashes', label: '神之灵光-闪次数' },
+                { id: 'normalAuraFlashes', label: '中立卡、怪物卡普通灵光-闪数量' },
+                { id: 'deleteCharCardCount', label: '删除角色卡次数' },
+                { id: 'deleteOtherCardCount', label: '删除其它卡次数' },
+                { id: 'copyCount', label: '复制次数' },
+                { id: 'transformCount', label: '转化次数' },
+            ];
 
-            // --- NEW: Initialize SortableJS ---
-            new Sortable(cardsContainer, {
-                animation: 150, // 动画
-                handle: '.drag-handle', // 指定拖动 handle
-                ghostClass: 'sortable-ghost', // 拖动占位符的样式
-                dragClass: 'sortable-drag', // 正在拖动的项目的样式
-                // 拖动结束时触发
-                onEnd: () => {
-                    // 订单已更改，重新计算所有总数
-                    // (SortableJS 已经更新了 DOM 顺序)
-                    calculateAllTotals();
-                }
-            });
-            // --- END NEW ---
+            const calculatorInputsContainer = document.getElementById('calculator-inputs');
+            const template = document.getElementById('counter-template');
+            const templateSingle = document.getElementById('counter-template-single');
+            
+            // 存储对动态创建的输入框的引用
+            let inputElements = {};
 
-            // 添加新卡牌
-            function addNewCard(calculateNow = true, isCopy = false) {
-                const newRow = cardRowTemplate.content.cloneNode(true).firstElementChild;
-                
-                // 设置默认值
-                newRow.querySelector('[data-param="carryOut"]').value = 'no_loss';
+            // --- 计算逻辑 ---
 
-                // 附加事件监听器
-                attachListenersToRow(newRow);
+            // 删除成本表
+            const deleteCharTiers = [20, 30, 50, 70, 90];
+            const deleteOtherTiers = [0, 10, 30, 50, 70];
 
-                // 如果是复制行
-                if (isCopy) {
-                    newRow.classList.add('opacity-70', 'border-dashed', 'border-blue-400');
-                    newRow.setAttribute('data-is-copy', 'true');
-                }
-                
-                cardsContainer.appendChild(newRow);
-                
-                if (calculateNow) {
-                    calculateAllTotals();
-                }
-                return newRow;
-            }
-
-            // 为一行中的所有元素附加监听器
-            function attachListenersToRow(row) {
-                // 1. 所有参数的通用监听器
-                row.querySelectorAll('.card-parameter').forEach(paramEl => {
-                    const eventType = (paramEl.tagName === 'INPUT') ? 'input' : 'change';
-                    paramEl.addEventListener(eventType, () => {
-                        // 特殊逻辑：显示/隐藏自定义输入框
-                        if (paramEl.dataset.param === 'effect') {
-                            const customContainer = row.querySelector('.custom-effect-container');
-                            customContainer.style.display = (paramEl.value === 'custom') ? 'block' : 'none';
-                        }
-                        // 特殊逻辑：显示/隐藏转换稀有度
-                        if (paramEl.dataset.param === 'operation') {
-                             const transformedRarityContainer = row.querySelector('.transformed-rarity-container');
-                            transformedRarityContainer.style.display = (paramEl.value === 'transform') ? 'block' : 'none';
-                            // 如果不是 transform，重置
-                            if (paramEl.value !== 'transform') {
-                                row.querySelector('[data-param="transformedRarity"]').value = 'none';
-                            }
-                        }
-                        calculateAllTotals();
-                    });
-                });
-
-                // 2. 删除按钮
-                row.querySelector('.remove-card-btn').addEventListener('click', (e) => {
-                    const rowToRemove = e.target.closest('.card-row');
-                    
-                    // 防止删除最后一行
-                    if (cardsContainer.children.length <= 1) {
-                        return; // 或者显示一个消息
-                    }
-                    
-                    rowToRemove.remove();
-                    calculateAllTotals();
-                });
-
-                // 3. 复制按钮
-                row.querySelector('.copy-card-btn').addEventListener('click', (e) => {
-                    const originalRow = e.target.closest('.card-row');
-                    
-                    const newCopiedRow = addNewCard(false, true); // 添加卡牌，标记为复制
-                    originalRow.after(newCopiedRow); // 放在原卡牌之后
-                    
-                    // 继承值
-                    newCopiedRow.querySelector('[data-param="rarity"]').value = originalRow.querySelector('[data-param="rarity"]').value;
-                    newCopiedRow.querySelector('[data-param="effect"]').value = originalRow.querySelector('[data-param="effect"]').value;
-                    newCopiedRow.querySelector('[data-param="customEffectValue"]').value = originalRow.querySelector('[data-param="customEffectValue"]').value;
-                    newCopiedRow.querySelector('[data-param="carryOut"]').value = originalRow.querySelector('[data-param="carryOut"]').value;
-
-                    // 如果原卡是自定义，显示自定义输入框
-                    if (newCopiedRow.querySelector('[data-param="effect"]').value === 'custom') {
-                         newCopiedRow.querySelector('.custom-effect-container').style.display = 'block';
-                    }
-
-                    // 增加复制次数
-                    totalCopyCount++;
-                    copyCountEl.textContent = totalCopyCount;
-
-                    calculateAllTotals(); // 重新计算
-                });
-            }
-
-
-            // 计算所有总分
-            function calculateAllTotals() {
-                let grandTotal = 0;
-                const allRows = cardsContainer.querySelectorAll('.card-row');
-
-                allRows.forEach((row, index) => {
-                    // 1. 基础点数 (稀有度)
-                    const rarityEl = row.querySelector('[data-param="rarity"]');
-                    const basePoints = parseInt(rarityEl.options[rarityEl.selectedIndex].dataset.points || 0);
-
-                    // 2. 操作点数
-                    const operation = row.querySelector('[data-param="operation"]').value;
-                    let operationPoints = 0;
-                    if (operation === 'remove') {
-                        operationPoints = basePoints; // 挂钩稀有度
-                    } else if (operation === 'transform') {
-                        const transformedRarityEl = row.querySelector('[data-param="transformedRarity"]');
-                        const transformedPoints = parseInt(transformedRarityEl.options[transformedRarityEl.selectedIndex].dataset.points || 0);
-                        operationPoints = basePoints + transformedPoints; // 基础 + 转换后
-                    }
-
-                    // 3. 效果点数
-                    const effectEl = row.querySelector('[data-param="effect"]');
-                    let effectPoints = 0;
-                    if (effectEl.value === 'custom') {
-                        effectPoints = parseInt(row.querySelector('[data-param="customEffectValue"]').value || 0);
-                        if (effectPoints < 0) effectPoints = 0;
-                        if (effectPoints > 12) effectPoints = 12;
+            /**
+             * 计算累进删除成本
+             * @param {number} count - 删除次数
+             * @param {number[]} tiers - 成本等级数组
+             * @returns {number} 总成本
+             */
+            function calculateDeletionCost(count, tiers) {
+                let totalCost = 0;
+                const maxTier = tiers.length - 1;
+                for (let i = 1; i <= count; i++) {
+                    if (i - 1 <= maxTier) {
+                        totalCost += tiers[i - 1];
                     } else {
-                        effectPoints = parseInt(effectEl.options[effectEl.selectedIndex].dataset.points || 0);
+                        totalCost += tiers[maxTier]; // 超过5次按最后一次的成本算
                     }
-
-                    // 4. 带出点数
-                    const carryOutEl = row.querySelector('[data-param="carryOut"]');
-                    const carryOutPoints = parseInt(carryOutEl.options[carryOutEl.selectedIndex].dataset.points || 0);
-                    
-                    // --- 基础行总分 (X) ---
-                    const baseRowTotal = basePoints + operationPoints + effectPoints + carryOutPoints;
-                    
-                    // --- 逻辑：计算最终行总分 (倍率) ---
-                    const isCopied = row.hasAttribute('data-is-copy');
-                    const isBeyondEighth = (index >= 8); // 索引从0开始，第9张卡 index 为 8
-                    
-                    let finalRowTotal = baseRowTotal;
-
-                    // 检查倍率
-                    if (isCopied) {
-                        finalRowTotal += baseRowTotal; // x+x
-                    }
-                    if (isBeyondEighth) {
-                        finalRowTotal += baseRowTotal; // x+x (如果也是复制的，则为 x+x+x)
-                    }
-                    
-                    // 更新 UI
-                    row.querySelector('.row-total').textContent = finalRowTotal;
-                    
-                    const beyondLabel = row.querySelector('.beyond-eighth-label');
-                    if (isBeyondEighth) {
-                        beyondLabel.style.display = 'inline';
-                    } else {
-                        beyondLabel.style.display = 'none';
-                    }
-
-                    grandTotal += finalRowTotal;
-                });
-
-                // 更新总分
-                grandTotalEl.textContent = grandTotal;
+                }
+                return totalCost;
             }
 
-            // 按钮点击事件
-            addCardBtn.addEventListener('click', () => {
-                addNewCard(true); // Standard add
-            });
+            /**
+             * 计算指定角色的总PT
+             * @param {number} charId - 角色ID (1, 2, or 3)
+             * @returns {number} 总PT
+             */
+            function calculateTotalPT(charId) {
+                const inputs = state.characters[charId - 1];
+                
+                // 1. 基础PT (Base PT)
+                const neutralPT = inputs.neutralCards * 20;
+                const monsterPT = inputs.monsterCards * 80;
+                const forbiddenPT = inputs.forbiddenCards * 20;
+                const basePT = neutralPT + monsterPT + forbiddenPT;
 
-            // "默认全开" 按钮
-            fillDefaultsBtn.addEventListener('click', () => {
-                cardsContainer.innerHTML = '';
-                totalCopyCount = 0;
-                copyCountEl.textContent = '0';
+                // 2. 灵光一闪PT (Aura Flash PT)
+                const normalAuraPT = inputs.normalAuraFlashes * 10;
+                const divineAuraPT = inputs.divineAuraFlashes * 20;
+                const auraPT = normalAuraPT + divineAuraPT;
+                
+                // 3. 删除成本 (Deletion Cost) - 这是减分项
+                const deleteCharCost = calculateDeletionCost(inputs.deleteCharCardCount, deleteCharTiers);
+                const deleteOtherCost = calculateDeletionCost(inputs.deleteOtherCardCount, deleteOtherTiers);
+                
+                // 4. 复制和转化 (Copy & Transform)
+                // (变更) 复制次数 规则同 删除其它卡次数
+                const copyPT = calculateDeletionCost(inputs.copyCount, deleteOtherTiers);
+                const transformPT = inputs.transformCount * 10; // (变更) 转化固定+10
 
-                const defaultRarities = [
-                    'common', 'common', 'common', // 3x 一般
-                    'rare', 'rare', 'rare',     // 3x 稀有
-                    'epic',                     // 1x 史诗
-                    'legendary'                 // 1x 传说
-                ];
+                // 总PT - (变更) 删除卡牌现在是 *增加* PT
+                const totalPT = basePT + auraPT + deleteCharCost + deleteOtherCost + copyPT + transformPT;
+                
+                return totalPT;
+            }
 
-                defaultRarities.forEach(rarity => {
-                    const newRow = addNewCard(false);
-                    newRow.querySelector('[data-param="rarity"]').value = rarity;
+            // --- UI 更新 ---
+
+            /**
+             * 更新所有UI元素以匹配当前状态
+             */
+            function updateUI() {
+                // 更新等级和上限
+                chaosLevelInput.value = state.chaosLevel;
+                state.ptLimit = (state.chaosLevel * 10) + 20;
+                ptLimitDisplay.textContent = state.ptLimit;
+                
+                // 更新Tab激活状态
+                tabs.forEach((tab, index) => {
+                    if (index + 1 === state.activeCharacterId) {
+                        tab.classList.add('active');
+                    } else {
+                        tab.classList.remove('active');
+                    }
                 });
 
-                calculateAllTotals();
+                // 更新所有角色的PT显示
+                ptDisplays.forEach((display, index) => {
+                    const charId = index + 1;
+                    const totalPT = calculateTotalPT(charId);
+                    display.textContent = totalPT;
+                    
+                    // 检查是否超限
+                    if (totalPT > state.ptLimit) {
+                        display.classList.add('over-limit');
+                    } else {
+                        display.classList.remove('over-limit');
+                    }
+                });
+
+                // 更新重置按钮文本
+                resetCharName.textContent = `角色${state.activeCharacterId}`;
+                
+                // 更新当前激活角色的计数器输入框
+                const activeInputs = state.characters[state.activeCharacterId - 1];
+                for (const id in activeInputs) {
+                    if (inputElements[id]) {
+                        inputElements[id].value = activeInputs[id];
+                    }
+                }
+            }
+            
+            // --- 动态创建计数器 ---
+            function createCounters() {
+                calculatorInputsContainer.innerHTML = ''; // 清空
+                inputElements = {}; // 重置引用
+
+                for (let i = 0; i < countersConfig.length; i += 2) {
+                    const config1 = countersConfig[i];
+                    const config2 = countersConfig[i + 1];
+
+                    if (config2) {
+                        // 创建双列
+                        const row = template.content.cloneNode(true);
+                        
+                        setupCounter(row, config1, 'left');
+                        setupCounter(row, config2, 'right');
+                        
+                        calculatorInputsContainer.appendChild(row);
+                    } else {
+                        // 创建单列 (用于最后一个)
+                        const row = templateSingle.content.cloneNode(true);
+                        
+                        setupCounter(row, config1, 'single');
+                        
+                        calculatorInputsContainer.appendChild(row);
+                    }
+                }
+            }
+
+            /**
+             * 辅助函数：设置单个计数器
+             * @param {DocumentFragment} row - 模板行
+             * @param {object} config - 计数器配置
+             * @param {string} prefix - 'left', 'right', or 'single'
+             */
+            function setupCounter(row, config, prefix) {
+                const label = row.querySelector(`[data-label="${prefix}-label"]`);
+                const minusBtn = row.querySelector(`[data-btn="${prefix}-minus"]`);
+                const input = row.querySelector(`[data-input="${prefix}-input"]`);
+                const plusBtn = row.querySelector(`[data-btn="${prefix}-plus"]`);
+                
+                label.textContent = config.label;
+                label.htmlFor = config.id;
+                input.id = config.id;
+                
+                // 存储引用
+                inputElements[config.id] = input;
+                
+                // 添加事件监听
+                minusBtn.addEventListener('click', () => handleCountChange(config.id, -1));
+                plusBtn.addEventListener('click', () => handleCountChange(config.id, 1));
+            }
+
+
+            // --- 事件处理 ---
+            
+            // 等级变更
+            levelMinusBtn.addEventListener('click', () => {
+                if (state.chaosLevel > 1) {
+                    state.chaosLevel--;
+                    updateUI();
+                }
+            });
+            
+            levelPlusBtn.addEventListener('click', () => {
+                state.chaosLevel++;
+                updateUI();
             });
 
-            // "重置" 按钮
+            // 计数器变更
+            function handleCountChange(id, delta) {
+                const activeInputs = state.characters[state.activeCharacterId - 1];
+                const currentValue = activeInputs[id];
+                if (currentValue + delta >= 0) {
+                    activeInputs[id] = currentValue + delta;
+                    updateUI();
+                }
+            }
+
+            // 切换Tab
+            tabs.forEach((tab, index) => {
+                tab.addEventListener('click', () => {
+                    state.activeCharacterId = index + 1;
+                    updateUI();
+                });
+            });
+            
+            // 重置按钮
             resetBtn.addEventListener('click', () => {
-                cardsContainer.innerHTML = '';
-                totalCopyCount = 0;
-                copyCountEl.textContent = '0';
-                addNewCard(true);
+                // (变更) 移除弹窗，直接重置
+                state.characters[state.activeCharacterId - 1] = { ...defaultInputs };
+                updateUI();
             });
+            
+            // (新) Modal listeners
+            /* (已移除) modalCancel, modalConfirm 事件监听 */
 
-            // 页面加载时自动添加一行
-            addNewCard(true);
+
+            // --- 初始化 ---
+            createCounters();
+            updateUI();
         });
     </script>
+
+    <!-- (新) 自定义确认弹窗 -->
+    <!-- (已移除) id="confirm-modal" 的整个 div -->
+
 </body>
 </html>
-
